@@ -6,15 +6,17 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Geist', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['Geist Mono', 'ui-monospace', 'monospace']
+      },
       colors: {
         primary: {
-          DEFAULT: '#168653',
-          dark: '#105B3D',
-          light: '#E9F7EF'
-        },
-        forest: '#14532D',
-        emerald: '#15803D',
-        accent: '#22C55E'
+          DEFAULT: '#16A34A',
+          hover: '#15803D',
+          soft: '#F0FDF4',
+          dark: '#14532D'
+        }
       }
     }
   },
