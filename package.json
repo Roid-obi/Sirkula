@@ -1,0 +1,23 @@
+{
+  "name": "sirkula-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:landing": "pnpm --filter @sirkula/landing dev",
+    "dev:admin": "pnpm --filter @sirkula/admin dev",
+    "dev:user": "pnpm --filter @sirkula/user dev",
+    "build": "turbo build",
+    "build:landing": "pnpm --filter @sirkula/landing build",
+    "build:admin": "pnpm --filter @sirkula/admin build",
+    "build:user": "pnpm --filter @sirkula/user build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3",
+    "prettier": "^3.3.3"
+  },
+  "packageManager": "pnpm@9.12.3"
+}

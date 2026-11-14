@@ -1,0 +1,13 @@
+{
+  "name": "@sirkula/config",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./brand.ts",
+  "types": "./brand.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

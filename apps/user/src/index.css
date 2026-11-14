@@ -1,0 +1,298 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Sirkula Intelligence — Native Mobile App UI System (No Glassmorphism)
+   ========================================================================== */
+
+:root {
+  /* Solid Clean Palette */
+  --background: 210 20% 98%;          /* Light clean grey #F8FAFC */
+  --foreground: 222 47% 11%;          /* Slate 900 #0F172A */
+
+  --card: 0 0% 100%;                  /* Solid White */
+  --card-foreground: 222 47% 11%;
+
+  /* Sirkula Emerald */
+  --primary: 142.1 76.2% 36.3%;       /* Emerald 600 #16A34A */
+  --primary-hover: 142.1 76.2% 30%;
+  --primary-foreground: 0 0% 100%;
+  --primary-soft: 142 70% 95%;        /* Soft solid green */
+
+  --secondary: 210 20% 94%;
+  --secondary-foreground: 222 47% 11%;
+
+  --muted: 210 20% 95%;               /* Solid grey */
+  --muted-foreground: 215 16% 47%;    /* Slate 500 */
+
+  --border: 214 32% 91%;              /* Slate 200 */
+  --input: 214 32% 91%;
+  --ring: 142.1 76.2% 36.3%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --destructive-soft: 0 86% 96%;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 26 83% 14%;
+  --warning-soft: 48 96% 94%;
+
+  --radius-sm: 0.5rem;
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-float: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+}
+
+.dark {
+  --background: 240 10% 4%;           /* Solid dark #09090b */
+  --foreground: 0 0% 98%;
+
+  --card: 240 10% 7%;                 /* Solid dark card #121214 */
+  --card-foreground: 0 0% 98%;
+
+  --primary: 142.1 70.6% 45.3%;
+  --primary-hover: 142.1 70.6% 38%;
+  --primary-foreground: 0 0% 100%;
+  --primary-soft: 144 61% 15%;
+
+  --secondary: 240 4% 16%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 240 4% 15%;
+  --muted-foreground: 240 5% 65%;
+
+  --border: 240 4% 18%;
+  --input: 240 4% 18%;
+  --ring: 142.1 70.6% 45.3%;
+
+  --destructive-soft: 0 60% 16%;
+  --warning-soft: 38 60% 16%;
+}
+
+body {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #F1F5F9;          /* Outer desktop viewport slate */
+  color: hsl(var(--foreground));
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Solid Mobile Surface & Elements */
+.mobile-card {
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.mobile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.mobile-badge-success {
+  background-color: hsl(var(--primary-soft));
+  color: hsl(var(--primary));
+}
+
+.mobile-badge-danger {
+  background-color: hsl(var(--destructive-soft));
+  color: hsl(var(--destructive));
+}
+
+.mobile-badge-warning {
+  background-color: hsl(var(--warning-soft));
+  color: hsl(var(--warning-foreground));
+}
+
+.mobile-btn-primary {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: 700;
+  border-radius: var(--radius);
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.mobile-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.mobile-btn-primary:hover {
+  background-color: hsl(var(--primary-hover));
+}
+
+.mobile-btn-secondary {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  border-radius: var(--radius);
+  transition: all 0.15s ease;
+}
+
+.mobile-btn-secondary:hover {
+  background-color: hsl(var(--muted));
+}
+
+.mono {
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ==========================================================================
+   Google Maps Style UI for Mobile RVM Locator
+   ========================================================================== */
+.leaflet-container {
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Leaflet clean Google Maps controls */
+.leaflet-top.leaflet-right,
+.leaflet-top.leaflet-left {
+  z-index: 20;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  font-size: 16px !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: hsl(var(--muted)) !important;
+}
+
+/* Google Maps style marker pin */
+.gmap-pin-container {
+  position: relative;
+  width: 38px;
+  height: 48px;
+  cursor: pointer;
+  transform: translate(-50%, -100%);
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.gmap-pin-container.selected {
+  transform: translate(-50%, -100%) scale(1.18);
+  z-index: 999 !important;
+}
+
+.gmap-pin-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+  border: 2px solid #ffffff;
+}
+
+.gmap-pin-badge.online {
+  background-color: #16A34A; /* Emerald */
+}
+
+.gmap-pin-badge.warning {
+  background-color: #D97706; /* Amber */
+}
+
+.gmap-pin-badge.offline {
+  background-color: #DC2626; /* Red */
+}
+
+/* Google Maps Native Current Location Indicator (Sirkula Emerald, No Blue) */
+.user-current-location-marker {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-location-halo {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(22, 163, 74, 0.25);
+  animation: userLocationPulse 2s infinite ease-out;
+}
+
+.user-location-dot {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #16A34A; /* Sirkula Emerald */
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+@keyframes userLocationPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0.15;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+.gmap-pin-inner {
+  transform: rotate(45deg);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gmap-pin-shadow {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 14px;
+  height: 6px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  filter: blur(1px);
+}
+
