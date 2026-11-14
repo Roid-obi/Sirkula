@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Squircle Base Emerald -->
+  <rect width="64" height="64" rx="16" fill="#16A34A"/>
+  
+  <!-- Bottle Cap -->
+  <rect x="27.5" y="10.5" width="9" height="4" rx="1.5" fill="#FFFFFF"/>
+  <rect x="26" y="14.5" width="12" height="2" rx="1" fill="#BBF7D0"/>
+  
+  <!-- Solid White Bottle Body -->
+  <path d="M26.5 17C26.5 19 21.5 21.5 21.5 27V46C21.5 49.5 24 52.5 27.5 52.5H36.5C40 52.5 42.5 49.5 42.5 46V27C42.5 21.5 37.5 19 37.5 17Z" fill="#FFFFFF"/>
+  
+  <!-- Recycle Cycle Engraving (Negative Space Effect in Emerald) -->
+  <path d="M32 29C35.8 29 37.5 31.5 37.5 34" stroke="#16A34A" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M37.5 31.5V34.5H34.5" stroke="#16A34A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <path d="M32 43C28.2 43 26.5 40.5 26.5 38" stroke="#16A34A" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M26.5 40.5V37.5H29.5" stroke="#16A34A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <circle cx="32" cy="36" r="2.4" fill="#16A34A"/>
+</svg>

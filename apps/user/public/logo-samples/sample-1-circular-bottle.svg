@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Squircle Base Emerald -->
+  <rect width="64" height="64" rx="16" fill="#16A34A"/>
+  
+  <!-- Bottle Cap & Neck Ring -->
+  <rect x="27" y="10" width="10" height="4.5" rx="1.5" fill="#FFFFFF"/>
+  <rect x="25.5" y="14.5" width="13" height="2" rx="1" fill="#BBF7D0"/>
+  
+  <!-- Outer Bottle Outline -->
+  <path d="M26.5 16.5C26.5 19 21 21.5 21 27V47C21 50.5 23.5 53 27 53H37C40.5 53 43 50.5 43 47V27C43 21.5 37.5 19 37.5 16.5" 
+        stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+        
+  <!-- Circular Recycle Arrows inside Bottle Body -->
+  <!-- Top-right clockwise curve -->
+  <path d="M32 28C36.5 28 38 31 38 34" stroke="#BBF7D0" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M38 31V34.5H34.5" stroke="#BBF7D0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Bottom-left clockwise curve -->
+  <path d="M32 44C27.5 44 26 41 26 38" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M26 41V37.5H29.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Center Core Node -->
+  <circle cx="32" cy="36" r="2.8" fill="#FFFFFF"/>
+</svg>

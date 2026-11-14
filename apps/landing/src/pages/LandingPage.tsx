@@ -25,9 +25,7 @@ export const LandingPage: React.FC = () => {
       <header className="sticky top-0 bg-white/90 backdrop-blur-md border-b border-gray-100 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-800 to-emerald-600 text-white flex items-center justify-center shadow-md">
-              <Leaf className="w-5 h-5" />
-            </div>
+            <img src="/logo.svg" alt="Sirkula Logo" className="w-9 h-9 rounded-xl shadow-md" />
             <div>
               <span className="font-black text-lg tracking-tight text-emerald-950">SIRKULA</span>
               <span className="hidden sm:inline-block text-[10px] uppercase font-bold text-emerald-700 ml-2 tracking-wider">
@@ -279,7 +277,7 @@ export const LandingPage: React.FC = () => {
       <footer className="mt-auto bg-gray-900 text-gray-400 text-xs py-8 border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-white font-bold">
-            <Leaf className="w-4 h-4 text-emerald-500" />
+            <img src="/logo.svg" alt="Sirkula Logo" className="w-5 h-5 rounded-md" />
             <span>SIRKULA INTELLIGENCE · UNS Hackathon 2026</span>
           </div>
           <p className="text-gray-500 text-[11px]">
