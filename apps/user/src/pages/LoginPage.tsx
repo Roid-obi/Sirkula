@@ -29,7 +29,7 @@ export const LoginPage: React.FC = () => {
         <div className="pt-4 space-y-1">
           <h2 className="text-xl font-black text-foreground">Selamat Datang 👋</h2>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Masuk untuk menyetor botol PET &amp; kaleng aluminium di Smart RVM Kampus UNS.
+            Masuk untuk menyetor botol PET &amp; kaleng aluminium di Smart RVM Sirkula.
           </p>
         </div>
       </div>
@@ -38,7 +38,7 @@ export const LoginPage: React.FC = () => {
       <div className="my-auto py-6">
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground block">Email Mahasiswa / No. Ponsel</label>
+            <label className="text-xs font-semibold text-foreground block">Email / No. Ponsel Terdaftar</label>
             <input
               type="text"
               value={email}
@@ -88,7 +88,7 @@ export const LoginPage: React.FC = () => {
 
       {/* Footer Info */}
       <div className="text-center text-[10px] text-muted-foreground pb-2 font-mono">
-        UNS Innovation Hackathon 2026 · Sirkula Ecosystem
+        Sirkula Intelligence · AIoT Circular Ecosystem
       </div>
     </div>
   );

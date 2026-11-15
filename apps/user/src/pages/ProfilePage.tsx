@@ -36,7 +36,7 @@ export const ProfilePage: React.FC = () => {
           <h2 className="text-sm font-bold text-foreground">{user.name}</h2>
           <span className="text-[11px] text-muted-foreground font-mono block">{user.id}</span>
           <span className="mobile-badge mobile-badge-success text-[10px] font-mono mt-1">
-            Mahasiswa UNS
+            Member Terverifikasi
           </span>
         </div>
       </div>

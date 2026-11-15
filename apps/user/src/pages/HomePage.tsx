@@ -33,7 +33,7 @@ export const HomePage: React.FC = () => {
             <div className="flex items-center gap-1.5">
               <h1 className="text-sm font-bold text-foreground">Halo, {user.name.split(' ')[0]}!</h1>
               <span className="text-[10px] font-semibold bg-primary-soft text-primary px-1.5 py-0.5 rounded-full">
-                UNS
+                Member
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground">Siap memulihkan kemasan hari ini?</p>

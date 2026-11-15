@@ -24,3 +24,10 @@ export const brandTokens = {
     badge: '9999px'
   }
 } as const;
+
+export const sirkulaUrls = {
+  admin: 'https://admin-sirkula.vercel.app',
+  user: 'https://user-mobile-sirkula.vercel.app',
+  landing: 'https://sirkula.vercel.app'
+} as const;
+

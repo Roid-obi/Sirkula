@@ -1,3 +1,4 @@
+@import 'leaflet/dist/leaflet.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -40,3 +41,93 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ==========================================================================
+   Live Telemetry Map & Radar Pulse for Smart RVM Landing Page
+   ========================================================================== */
+.leaflet-container {
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+}
+
+.rvm-live-marker {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.rvm-live-pulse {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  animation: rvmPulse 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+.rvm-live-pulse.online {
+  background-color: rgba(22, 163, 74, 0.25);
+  border: 1.5px solid rgba(22, 163, 74, 0.7);
+}
+
+.rvm-live-pulse.warning {
+  background-color: rgba(217, 119, 6, 0.25);
+  border: 1.5px solid rgba(217, 119, 6, 0.7);
+}
+
+.rvm-live-pulse.offline {
+  background-color: rgba(220, 38, 38, 0.25);
+  border: 1.5px solid rgba(220, 38, 38, 0.7);
+}
+
+.rvm-live-dot {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #16A34A;
+  border: 2.5px solid #FFFFFF;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 2;
+}
+
+.rvm-live-marker:hover .rvm-live-dot,
+.rvm-live-marker.selected .rvm-live-dot {
+  transform: scale(1.25);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  border-color: #FFFFFF;
+}
+
+.rvm-live-dot.warning {
+  background-color: #D97706;
+}
+
+.rvm-live-dot.offline {
+  background-color: #DC2626;
+}
+
+@keyframes rvmPulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.95;
+  }
+  70% {
+    transform: scale(1.7);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+

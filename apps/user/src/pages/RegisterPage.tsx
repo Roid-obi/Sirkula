@@ -27,7 +27,7 @@ export const RegisterPage: React.FC = () => {
           <div>
             <h1 className="font-extrabold text-base tracking-tight text-foreground">Daftar Akun Baru</h1>
             <span className="text-[10px] font-bold font-mono text-primary uppercase block -mt-0.5">
-              Sirkula UNS Ecosystem
+              Sirkula Ecosystem
             </span>
           </div>
         </div>
@@ -35,7 +35,7 @@ export const RegisterPage: React.FC = () => {
         <div className="pt-4 space-y-1">
           <h2 className="text-xl font-black text-foreground">Bergabung dengan Sirkula 🌿</h2>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Mulai langkah pemulihan kemasan sirkular dan kumpulkan reward di Smart RVM UNS.
+            Mulai langkah pemulihan kemasan sirkular dan kumpulkan reward di Smart RVM.
           </p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export const RegisterPage: React.FC = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground block">Email Mahasiswa (SSO / student.uns.ac.id)</label>
+            <label className="text-xs font-semibold text-foreground block">Alamat Email Aktif</label>
             <input
               type="email"
               value={email}
@@ -100,7 +100,7 @@ export const RegisterPage: React.FC = () => {
 
       {/* Footer */}
       <div className="text-center text-[10px] text-muted-foreground pb-2 font-mono">
-        UNS Innovation Hackathon 2026 · Sirkula Ecosystem
+        Sirkula Intelligence · AIoT Circular Ecosystem
       </div>
     </div>
   );
