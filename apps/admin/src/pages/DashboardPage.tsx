@@ -1,382 +1,574 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { NavLink } from 'react-router-dom';
 import {
-  Recycle,
-  Coins,
-  Cpu,
-  ShieldCheck,
-  ArrowUpRight,
-  Sparkles,
   RotateCcw,
+  Sparkles,
+  PackageCheck,
+  Scale,
+  Wallet,
+  Cpu,
+  ArrowUpRight,
   X,
-  CheckCircle2,
-  AlertCircle
+  QrCode,
+  Camera,
+  GitBranch,
+  Coins
 } from 'lucide-react';
+import Chart from 'chart.js/auto';
 import { useAdmin } from '../context/AdminContext';
-import { MOCK_DAILY_TREND } from '../data/adminStore';
-import { Transaction } from '@sirkula/shared-types';
+
+interface DailyTrendItem {
+  date: string;
+  pet: number;
+  alu: number;
+  rejected: number;
+}
+
+const DAILY_TREND_14D: DailyTrendItem[] = [
+  { date: '25 Okt', pet: 112, alu: 58, rejected: 9 },
+  { date: '26 Okt', pet: 98, alu: 49, rejected: 7 },
+  { date: '27 Okt', pet: 134, alu: 72, rejected: 11 },
+  { date: '28 Okt', pet: 148, alu: 81, rejected: 10 },
+  { date: '29 Okt', pet: 142, alu: 76, rejected: 8 },
+  { date: '30 Okt', pet: 165, alu: 92, rejected: 12 },
+  { date: '31 Okt', pet: 128, alu: 64, rejected: 6 },
+  { date: '01 Nov', pet: 119, alu: 61, rejected: 7 },
+  { date: '02 Nov', pet: 156, alu: 85, rejected: 9 },
+  { date: '03 Nov', pet: 174, alu: 94, rejected: 11 },
+  { date: '04 Nov', pet: 169, alu: 88, rejected: 8 },
+  { date: '05 Nov', pet: 188, alu: 103, rejected: 10 },
+  { date: '06 Nov', pet: 196, alu: 109, rejected: 9 },
+  { date: '07 Nov', pet: 214, alu: 118, rejected: 11 }
+];
 
 export const DashboardPage: React.FC = () => {
-  const { machines, transactions, kpis, simulateLiveTransaction, resetDemoData } = useAdmin();
-  const [trendMetric, setTrendMetric] = useState<'unit' | 'kg'>('unit');
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const {
+    machines,
+    transactions,
+    theme,
+    simulateLiveTransaction,
+    resetDemoData
+  } = useAdmin();
 
-  const totalUnits = kpis.totalPetUnits + kpis.totalAluUnits;
-  const totalKg = Number((kpis.totalPetKg + kpis.totalAluKg).toFixed(2));
-  const recentTx = transactions.slice(0, 5);
+  const [currentTrendMode, setCurrentTrendMode] = useState<'unit' | 'kg'>('unit');
+  const [selectedTx, setSelectedTx] = useState<any | null>(null);
 
-  const petPct = totalUnits > 0 ? Math.round((kpis.totalPetUnits / totalUnits) * 100) : 65;
-  const aluPct = 100 - petPct;
+  const trendCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const splitCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const trendChartInstanceRef = useRef<Chart | null>(null);
+  const splitChartInstanceRef = useRef<Chart | null>(null);
+
+  // Formatting helpers matching duitin-sampah-hackathon
+  const formatRupiah = (amount: number) => {
+    const n = Math.round(Number(amount) || 0);
+    return 'Rp' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const formatNumber = (num: number) => {
+    const n = Number(num) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const formatKg = (num: number) => {
+    return Number(num).toFixed(2).replace('.', ',') + ' kg';
+  };
+
+  // Metrics calculations
+  const baselinePet = 2145;
+  const baselineAlu = 1150;
+  const baselineReward = 559500;
+  const baselineRejected = 128;
+
+  const extraAcceptedPet = transactions.filter(
+    (t) => (t.status === 'ACCEPTED' || (t as any).status === 'accepted') && t.material === 'PET'
+  ).length;
+  const extraAcceptedAlu = transactions.filter(
+    (t) => (t.status === 'ACCEPTED' || (t as any).status === 'accepted') && (t.material === 'ALUMINUM' || (t.material as any) === 'ALU')
+  ).length;
+  const extraRejected = transactions.filter(
+    (t) => t.status === 'REJECTED' || (t as any).status === 'rejected'
+  ).length;
+  const extraReward = transactions
+    .filter((t) => t.status === 'ACCEPTED' || (t as any).status === 'accepted')
+    .reduce((sum, t) => sum + (t.rewardPoints ? t.rewardPoints * 10 : (t as any).rewardRp || 0), 0);
+
+  const petUnits = baselinePet + extraAcceptedPet;
+  const aluUnits = baselineAlu + extraAcceptedAlu;
+  const acceptedUnits = petUnits + aluUnits;
+  const rejectedUnits = baselineRejected + extraRejected;
+  const totalTx = acceptedUnits + rejectedUnits + 2;
+  const petKg = petUnits * 0.0195;
+  const aluKg = aluUnits * 0.0142;
+  const totalKg = petKg + aluKg;
+  const totalRewardRp = baselineReward + extraReward;
+  const acceptanceRatePct = ((acceptedUnits / totalTx) * 100).toFixed(1).replace('.', ',');
+
+  const petPct = ((petUnits / acceptedUnits) * 100).toFixed(1).replace('.', ',');
+  const aluPct = ((aluUnits / acceptedUnits) * 100).toFixed(1).replace('.', ',');
+
+  // Palette helper matching duitin-sampah-hackathon
+  const getPalette = () => {
+    const isDark = theme === 'dark';
+    return {
+      textMuted: isDark ? '#a1a1aa' : '#71717a',
+      textPrimary: isDark ? '#fafafa' : '#09090b',
+      grid: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(9, 9, 11, 0.06)',
+      tooltipBg: isDark ? '#18181b' : '#ffffff',
+      tooltipBorder: isDark ? '#27272a' : '#e4e4e7',
+      pet: isDark ? '#38bdf8' : '#0ea5e9',
+      petFill: isDark ? 'rgba(56, 189, 248, 0.16)' : 'rgba(14, 165, 233, 0.12)',
+      alu: isDark ? '#22c55e' : '#16a34a',
+      aluFill: isDark ? 'rgba(34, 197, 94, 0.16)' : 'rgba(22, 163, 74, 0.13)'
+    };
+  };
+
+  // Render Charts
+  useEffect(() => {
+    const palette = getPalette();
+
+    // 1. Line Chart
+    if (trendCanvasRef.current) {
+      if (trendChartInstanceRef.current) {
+        trendChartInstanceRef.current.destroy();
+      }
+
+      const labels = DAILY_TREND_14D.map((d) => d.date);
+      const petData = DAILY_TREND_14D.map((d) =>
+        currentTrendMode === 'unit' ? d.pet : Number((d.pet * 0.0195).toFixed(2))
+      );
+      const aluData = DAILY_TREND_14D.map((d) =>
+        currentTrendMode === 'unit' ? d.alu : Number((d.alu * 0.0142).toFixed(2))
+      );
+
+      trendChartInstanceRef.current = new Chart(trendCanvasRef.current, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: currentTrendMode === 'unit' ? 'Botol PET (unit)' : 'Botol PET (kg)',
+              data: petData,
+              borderColor: palette.pet,
+              backgroundColor: palette.petFill,
+              borderWidth: 2,
+              tension: 0.32,
+              fill: true,
+              pointRadius: 2.5,
+              pointHoverRadius: 5
+            },
+            {
+              label: currentTrendMode === 'unit' ? 'Kaleng Aluminium (unit)' : 'Kaleng Aluminium (kg)',
+              data: aluData,
+              borderColor: palette.alu,
+              backgroundColor: palette.aluFill,
+              borderWidth: 2,
+              tension: 0.32,
+              fill: true,
+              pointRadius: 2.5,
+              pointHoverRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: palette.tooltipBg,
+              titleColor: palette.textPrimary,
+              bodyColor: palette.textMuted,
+              borderColor: palette.tooltipBorder,
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 8,
+              boxPadding: 4
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: palette.textMuted, font: { size: 11 } }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: palette.grid },
+              ticks: { color: palette.textMuted, font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Doughnut Chart
+    if (splitCanvasRef.current) {
+      if (splitChartInstanceRef.current) {
+        splitChartInstanceRef.current.destroy();
+      }
+
+      splitChartInstanceRef.current = new Chart(splitCanvasRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: ['Botol Plastik PET', 'Kaleng Aluminium'],
+          datasets: [
+            {
+              data: [petUnits, aluUnits],
+              backgroundColor: [palette.pet, palette.alu],
+              borderColor: palette.tooltipBg,
+              borderWidth: 3,
+              hoverOffset: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: palette.tooltipBg,
+              titleColor: palette.textPrimary,
+              bodyColor: palette.textMuted,
+              borderColor: palette.tooltipBorder,
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 8
+            }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (trendChartInstanceRef.current) trendChartInstanceRef.current.destroy();
+      if (splitChartInstanceRef.current) splitChartInstanceRef.current.destroy();
+    };
+  }, [currentTrendMode, theme, petUnits, aluUnits]);
+
+  // Status Badge Helper
+  const renderStatusBadge = (status: string, label?: string) => {
+    const isAccepted = status === 'ACCEPTED' || status === 'accepted';
+    const isPending = status === 'PENDING' || status === 'pending';
+
+    if (isAccepted) {
+      return (
+        <span className="badge badge-success">
+          <span className="badge-dot" />
+          {label || 'Diterima'}
+        </span>
+      );
+    }
+    if (isPending) {
+      return (
+        <span className="badge badge-warning">
+          <span className="badge-dot" />
+          {label || 'Menunggu'}
+        </span>
+      );
+    }
+    return (
+      <span className="badge badge-destructive">
+        <span className="badge-dot" />
+        {label || 'Ditolak'}
+      </span>
+    );
+  };
+
+  // Material Badge Helper
+  const renderMaterialBadge = (material: string, label?: string) => {
+    if (material === 'PET') return <span className="badge badge-info">PET</span>;
+    if (material === 'ALUMINUM' || material === 'ALU')
+      return <span className="badge badge-success">Aluminium</span>;
+    return <span className="badge badge-outline">{label || 'Non-MVP'}</span>;
+  };
+
+  const recentTransactions = transactions.slice(0, 5);
 
   return (
-    <div className="space-y-6">
+    <>
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-black text-foreground tracking-tight">
-            Ringkasan Operasional
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Metrik agregat pengumpulan material dan kinerja validasi sensor Smart RVM secara real-time.
+          <h1 className="page-title">Ringkasan Operasional</h1>
+          <p className="page-description">
+            Metrik agregat pengumpulan material dan kinerja validasi sensor RVM di Kampus UNS.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="page-actions demo-only">
           <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            id="btn-reset-demo"
             onClick={resetDemoData}
-            className="px-3 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition flex items-center gap-1.5"
-            title="Kembalikan data ke awal"
+            title="Kembalikan data ke kondisi awal"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw size={14} />
             <span>Reset</span>
           </button>
           <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            id="btn-simulate-tx"
             onClick={simulateLiveTransaction}
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles size={14} />
             <span>Simulasi Transaksi</span>
           </button>
         </div>
       </div>
 
       {/* 4 KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Total Material Terkumpul</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
-              <Recycle className="w-4 h-4" />
-            </div>
+      <section className="grid-kpi" id="kpi-container">
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Kemasan Terverifikasi</span>
+            <span className="kpi-icon">
+              <PackageCheck size={15} />
+            </span>
           </div>
-          <div className="text-2xl font-black font-mono text-foreground">{totalUnits} unit</div>
-          <div className="text-[11px] text-muted-foreground flex items-center justify-between">
-            <span>Setara {totalKg} kg</span>
-            <span className="text-emerald-600 font-semibold font-mono">100% Terpilah</span>
+          <div className="kpi-value">
+            {formatNumber(acceptedUnits)}{' '}
+            <span style={{ fontSize: '0.9rem', fontWeight: 500 }} className="text-muted">
+              unit
+            </span>
           </div>
-        </div>
-
-        <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Reward Diterbitkan</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center">
-              <Coins className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black font-mono text-foreground">
-            {kpis.totalPointsIssued.toLocaleString('id-ID')} Poin
-          </div>
-          <div className="text-[11px] text-muted-foreground flex items-center justify-between">
-            <span>Rp{(kpis.totalPointsIssued * 10).toLocaleString('id-ID')} estimasi</span>
-            <span className="text-primary font-semibold font-mono">Anti Double-Claim</span>
+          <div className="kpi-sub">
+            <span className="text-success font-medium">+128 unit</span>
+            <span>hari ini</span>
           </div>
         </div>
 
-        <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Kesiapan Mesin RVM</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center">
-              <Cpu className="w-4 h-4" />
-            </div>
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Total Berat Terpilah</span>
+            <span className="kpi-icon">
+              <Scale size={15} />
+            </span>
           </div>
-          <div className="text-2xl font-black font-mono text-foreground">
-            {kpis.activeMachinesCount}/{kpis.totalMachinesCount} Unit
-          </div>
-          <div className="text-[11px] text-muted-foreground flex items-center justify-between">
-            <span>Kapasitas Rata-rata 58%</span>
-            <span className="text-emerald-600 font-semibold font-mono">● Online</span>
+          <div className="kpi-value">{formatKg(totalKg)}</div>
+          <div className="kpi-sub">
+            <span>Material bersih tervalidasi</span>
           </div>
         </div>
 
-        <div className="bg-card p-5 rounded-2xl border border-border shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Kemurnian Material</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 flex items-center justify-center">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Saldo Reward Disalurkan</span>
+            <span className="kpi-icon">
+              <Wallet size={15} />
+            </span>
           </div>
-          <div className="text-2xl font-black font-mono text-foreground">
-            {kpis.cleanRecyclingRatePct}% Bersih
-          </div>
-          <div className="text-[11px] text-muted-foreground flex items-center justify-between">
-            <span>HX711 Anti-Air Aktif</span>
-            <span className="text-emerald-600 font-semibold font-mono">0% Kontaminasi</span>
+          <div className="kpi-value">{formatRupiah(totalRewardRp)}</div>
+          <div className="kpi-sub">
+            <span>1.130 klaim berhasil</span>
           </div>
         </div>
-      </div>
 
-      {/* Row 2: Trend Chart & Material Composition */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Trend Visual (8 cols) */}
-        <div className="lg:col-span-8 bg-card rounded-2xl border border-border p-5 space-y-4 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Tingkat Penerimaan</span>
+            <span className="kpi-icon">
+              <Cpu size={15} />
+            </span>
+          </div>
+          <div className="kpi-value">{acceptanceRatePct}%</div>
+          <div className="kpi-sub">
+            <span>{formatNumber(rejectedUnits)} unit ditolak</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Row 2: 14-Day Trend + Material Split */}
+      <section className="grid-main-aside">
+        <div className="card">
+          <div className="card-header">
             <div>
-              <h2 className="text-sm font-bold text-foreground">Tren Pengumpulan 14 Hari</h2>
-              <p className="text-[11px] text-muted-foreground">Penerimaan harian kemasan PET dan Aluminium dari seluruh unit.</p>
+              <h2 className="card-title">Tren Pengumpulan (14 Hari)</h2>
+              <p className="card-description">Penerimaan harian kemasan PET dan Aluminium.</p>
             </div>
-            <div className="bg-muted p-1 rounded-xl flex items-center gap-1 text-xs">
+            <div className="tabs-list" id="trend-mode-tabs">
               <button
-                onClick={() => setTrendMetric('unit')}
-                className={`px-3 py-1 rounded-lg font-semibold transition ${
-                  trendMetric === 'unit'
-                    ? 'bg-card text-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                type="button"
+                className={`tab-trigger ${currentTrendMode === 'unit' ? 'active' : ''}`}
+                onClick={() => setCurrentTrendMode('unit')}
               >
                 Unit
               </button>
               <button
-                onClick={() => setTrendMetric('kg')}
-                className={`px-3 py-1 rounded-lg font-semibold transition ${
-                  trendMetric === 'kg'
-                    ? 'bg-card text-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                type="button"
+                className={`tab-trigger ${currentTrendMode === 'kg' ? 'active' : ''}`}
+                onClick={() => setCurrentTrendMode('kg')}
               >
                 Berat (kg)
               </button>
             </div>
           </div>
-
-          {/* Trend Bar Chart */}
-          <div className="h-60 flex items-end gap-2 pt-6 pb-2 px-1">
-            {MOCK_DAILY_TREND.map((item, idx) => {
-              const maxVal = trendMetric === 'unit' ? 400 : 8;
-              const currentVal = trendMetric === 'unit' ? item.petUnits + item.aluUnits : item.petKg + item.aluKg;
-              const heightPct = Math.min(100, Math.round((currentVal / maxVal) * 100));
-
-              return (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                  {/* Tooltip on hover */}
-                  <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-lg z-20 whitespace-nowrap pointer-events-none">
-                    <span className="font-bold">{item.label}</span>
-                    <span>PET: {trendMetric === 'unit' ? `${item.petUnits} u` : `${item.petKg} kg`}</span>
-                    <span>Alu: {trendMetric === 'unit' ? `${item.aluUnits} u` : `${item.aluKg} kg`}</span>
-                  </div>
-
-                  <div className="w-full bg-muted rounded-t-lg h-44 flex items-end overflow-hidden">
-                    <div
-                      className="w-full bg-primary hover:bg-primary-hover transition-all duration-300 rounded-t-sm"
-                      style={{ height: `${heightPct}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-muted-foreground truncate w-full text-center">
-                    {item.label.split(' ')[0]}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="card-content">
+            <div className="chart-box">
+              <canvas ref={trendCanvasRef} />
+            </div>
           </div>
-
-          <div className="flex items-center justify-between text-xs pt-2 border-t border-border text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-primary" />
-                <span>Botol PET (Rp100/u)</span>
+          <div className="card-footer">
+            <div className="row-gap">
+              <span className="row-gap-sm text-xs">
+                <span className="legend-dot pet" /> PET (Rp100/unit)
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
-                <span>Kaleng Aluminium (Rp300/u)</span>
+              <span className="row-gap-sm text-xs">
+                <span className="legend-dot alu" /> Aluminium (Rp300/unit)
               </span>
             </div>
-            <span className="font-mono text-[11px]">Rata-rata: 284 kemasan/hari</span>
           </div>
         </div>
 
-        {/* Material Composition (4 cols) */}
-        <div className="lg:col-span-4 bg-card rounded-2xl border border-border p-5 space-y-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-foreground">Proporsi Material</h2>
-            <p className="text-[11px] text-muted-foreground">Komposisi kemasan terpilah saat ini.</p>
-          </div>
-
-          {/* Simple Radial Visual */}
-          <div className="py-4 space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="font-semibold text-foreground flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-primary" />
-                  Botol Plastik PET
-                </span>
-                <span className="font-mono font-bold text-foreground">{kpis.totalPetUnits} u ({petPct}%)</span>
-              </div>
-              <div className="w-full bg-muted h-3 rounded-full overflow-hidden">
-                <div className="bg-primary h-full rounded-full" style={{ width: `${petPct}%` }} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="font-semibold text-foreground flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-sky-500" />
-                  Kaleng Aluminium
-                </span>
-                <span className="font-mono font-bold text-foreground">{kpis.totalAluUnits} u ({aluPct}%)</span>
-              </div>
-              <div className="w-full bg-muted h-3 rounded-full overflow-hidden">
-                <div className="bg-sky-500 h-full rounded-full" style={{ width: `${aluPct}%` }} />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-muted/60 rounded-xl space-y-1.5 text-xs">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Berat PET:</span>
-              <span className="font-mono font-bold text-foreground">{kpis.totalPetKg} kg</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Berat Alu:</span>
-              <span className="font-mono font-bold text-foreground">{kpis.totalAluKg} kg</span>
-            </div>
-            <div className="flex justify-between border-t border-border pt-1 font-semibold">
-              <span className="text-foreground">Akumulasi Bersih:</span>
-              <span className="font-mono text-primary font-bold">{totalKg} kg</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 3: Recent Transactions + Machine Status Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Recent Transactions (8 cols) */}
-        <div className="lg:col-span-8 bg-card rounded-2xl border border-border p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between border-b border-border pb-3">
+        <div className="card">
+          <div className="card-header">
             <div>
-              <h2 className="text-sm font-bold text-foreground">Aktivitas Transaksi Terbaru</h2>
-              <p className="text-[11px] text-muted-foreground">Log penyetoran kemasan dan hasil verifikasi sensor.</p>
+              <h2 className="card-title">Proporsi Material</h2>
+              <p className="card-description">Komposisi material terpilah.</p>
             </div>
-            <Link
-              to="/transaksi"
-              className="text-xs font-semibold text-primary hover:text-primary-hover flex items-center gap-1"
-            >
+          </div>
+          <div className="card-content">
+            <div className="chart-box-sm" style={{ height: '190px' }}>
+              <canvas ref={splitCanvasRef} />
+            </div>
+            <div className="kv-list" style={{ marginTop: '0.9rem' }}>
+              <div className="kv-row">
+                <span className="row-gap-sm">
+                  <span className="legend-dot pet" /> Botol PET ({petPct}%)
+                </span>
+                <span className="kv-val mono">{formatNumber(petUnits)} unit</span>
+              </div>
+              <div className="kv-row">
+                <span className="row-gap-sm">
+                  <span className="legend-dot alu" /> Aluminium ({aluPct}%)
+                </span>
+                <span className="kv-val mono">{formatNumber(aluUnits)} unit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Row 3: Recent Transactions + Machine Quick Status */}
+      <section className="grid-main-aside">
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">Aktivitas Transaksi Terbaru</h2>
+              <p className="card-description">Log penyetoran kemasan dan hasil verifikasi multi-modal.</p>
+            </div>
+            <NavLink to="/transaksi" className="btn btn-outline btn-sm">
               <span>Semua Transaksi</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
+              <ArrowUpRight size={14} />
+            </NavLink>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th className="pb-2.5 font-semibold">ID &amp; Waktu</th>
-                  <th className="pb-2.5 font-semibold">Pengguna</th>
-                  <th className="pb-2.5 font-semibold">Mesin</th>
-                  <th className="pb-2.5 font-semibold">Material</th>
-                  <th className="pb-2.5 font-semibold">Status</th>
-                  <th className="pb-2.5 font-semibold text-right">Poin</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recentTx.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    onClick={() => setSelectedTx(tx)}
-                    className="hover:bg-muted/50 transition cursor-pointer"
-                  >
-                    <td className="py-3 font-mono">
-                      <span className="font-semibold text-foreground block">{tx.id}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(tx.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
-                      </span>
-                    </td>
-                    <td className="py-3 text-foreground font-medium">{tx.userName}</td>
-                    <td className="py-3 text-muted-foreground truncate max-w-[140px]">{tx.machineName}</td>
-                    <td className="py-3">
-                      <span className="px-2 py-0.5 rounded-md bg-muted text-[11px] font-medium text-foreground">
-                        {tx.material} ({tx.weightG}g)
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          tx.status === 'ACCEPTED'
-                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
-                            : 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300'
-                        }`}
-                      >
-                        {tx.status === 'ACCEPTED' ? 'Diterima' : 'Ditolak'}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right font-mono font-bold text-primary">
-                      {tx.rewardPoints > 0 ? `+${tx.rewardPoints}` : '0'}
-                    </td>
+          <div className="card-content">
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>ID &amp; Waktu</th>
+                    <th>Pengguna</th>
+                    <th>Mesin</th>
+                    <th>Material</th>
+                    <th>Status</th>
+                    <th className="text-right">Reward</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recentTransactions.map((tx: any) => {
+                    const timePart = tx.timestamp.includes(', ')
+                      ? tx.timestamp.split(', ')[1]
+                      : new Date(tx.timestamp).toLocaleTimeString('id-ID', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        });
+
+                    const rewardValue = tx.rewardRp || (tx.rewardPoints ? tx.rewardPoints * 10 : 0);
+
+                    return (
+                      <tr
+                        key={tx.id}
+                        className="clickable"
+                        onClick={() => setSelectedTx(tx)}
+                      >
+                        <td>
+                          <span className="mono font-medium">{tx.id}</span>
+                          <span className="text-xs text-muted" style={{ marginLeft: '0.35rem' }}>
+                            {timePart}
+                          </span>
+                        </td>
+                        <td className="font-medium">{tx.user || tx.userName}</td>
+                        <td>
+                          <span className="text-xs text-muted">
+                            {(tx.machineName || '').replace(' UNS', '')}
+                          </span>
+                        </td>
+                        <td>{renderMaterialBadge(tx.material, tx.materialLabel)}</td>
+                        <td>{renderStatusBadge(tx.status, tx.statusLabel)}</td>
+                        <td className="text-right mono font-semibold">
+                          {rewardValue > 0 ? '+' + formatRupiah(rewardValue) : 'Rp0'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        {/* Machine Quick Status (4 cols) */}
-        <div className="lg:col-span-4 bg-card rounded-2xl border border-border p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between border-b border-border pb-3">
+        <div className="card">
+          <div className="card-header">
             <div>
-              <h2 className="text-sm font-bold text-foreground">Status Unit RVM</h2>
-              <p className="text-[11px] text-muted-foreground">Kapasitas wadah &amp; jaringan mesin.</p>
+              <h2 className="card-title">Status Unit RVM</h2>
+              <p className="card-description">Kapasitas wadah &amp; jaringan mesin.</p>
             </div>
-            <Link
-              to="/mesin"
-              className="text-xs font-semibold text-primary hover:text-primary-hover"
-            >
+            <NavLink to="/mesin" className="btn btn-outline btn-sm">
               Detail
-            </Link>
+            </NavLink>
           </div>
+          <div className="card-content stack" style={{ gap: '0.85rem' }}>
+            {machines.map((m) => {
+              const totalCount = m.petCount + m.aluCount;
+              const totalCap = m.petCap + m.aluCap;
+              const totalPct = Math.round((totalCount / totalCap) * 100);
 
-          <div className="space-y-3">
-            {machines.map((machine) => {
-              const petFill = Math.round((machine.petCount / machine.petCap) * 100);
+              let badgeClass = 'badge-success';
+              if (m.status === 'warning') badgeClass = 'badge-warning';
+              if (m.status === 'offline') badgeClass = 'badge-destructive';
+
               return (
                 <div
-                  key={machine.id}
-                  className="p-3 rounded-xl border border-border bg-background/50 space-y-2"
+                  key={m.id}
+                  style={{
+                    padding: '0.65rem 0.8rem',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: 'var(--radius)',
+                    background: 'hsl(var(--card))'
+                  }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-mono text-muted-foreground block">{machine.id}</span>
-                      <h4 className="text-xs font-bold text-foreground truncate max-w-[160px]">{machine.name}</h4>
-                    </div>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        machine.status === 'online'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : machine.status === 'warning'
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                          : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                      }`}
-                    >
-                      {machine.statusLabel}
+                  <div className="row-between">
+                    <span className="font-medium text-sm">{m.name}</span>
+                    <span className={`badge ${badgeClass}`}>
+                      <span className="badge-dot" />
+                      {m.statusLabel}
                     </span>
                   </div>
-
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-muted-foreground">Kapasitas Wadah PET</span>
-                      <span className="font-mono font-bold text-foreground">{petFill}%</span>
+                  <div style={{ marginTop: '0.45rem' }}>
+                    <div className="row-between text-xs mono text-muted" style={{ marginBottom: '3px' }}>
+                      <span>Kapasitas: {totalPct}%</span>
+                      <span>
+                        {totalCount}/{totalCap} unit
+                      </span>
                     </div>
-                    <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
+                    <div className="progress">
                       <div
-                        className={`h-full rounded-full ${petFill > 85 ? 'bg-amber-500' : 'bg-primary'}`}
-                        style={{ width: `${petFill}%` }}
+                        className={`progress-bar ${totalPct >= 80 ? 'warn' : 'primary'}`}
+                        style={{ width: `${totalPct}%` }}
                       />
                     </div>
                   </div>
@@ -385,117 +577,228 @@ export const DashboardPage: React.FC = () => {
             })}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Slide-over Transaction Detail Drawer */}
+      {/* Slide-over Sheet for Transaction Verification Detail - Exact duitin-sampah-hackathon */}
       {selectedTx && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/50 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-card border-l border-border h-full p-6 overflow-y-auto space-y-5 animate-in slide-in-from-right">
-            <div className="flex items-center justify-between border-b border-border pb-4">
+        <>
+          <div
+            className="sheet-backdrop open"
+            id="tx-sheet-backdrop"
+            onClick={() => setSelectedTx(null)}
+          />
+          <aside className="sheet-panel open" id="tx-sheet-panel" aria-hidden="false">
+            <div className="sheet-header">
               <div>
-                <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-wider">
-                  Verifikasi Multi-Modal
-                </span>
-                <h3 className="text-base font-bold text-foreground">{selectedTx.id}</h3>
+                <div className="row-gap-sm">
+                  <h3 className="card-title mono" id="sheet-tx-id">
+                    {selectedTx.id}
+                  </h3>
+                  <span id="sheet-tx-badge">
+                    {renderStatusBadge(selectedTx.status, selectedTx.statusLabel)}
+                  </span>
+                </div>
+                <p className="card-description" id="sheet-tx-time">
+                  {selectedTx.timestamp} · {selectedTx.machineId} ({selectedTx.machineName})
+                </p>
               </div>
               <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                id="btn-close-sheet"
+                aria-label="Tutup panel"
                 onClick={() => setSelectedTx(null)}
-                className="p-1.5 rounded-xl border border-border text-muted-foreground hover:bg-muted"
               >
-                <X className="w-4 h-4" />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-3 bg-muted rounded-xl space-y-1 text-xs font-mono">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Pengguna:</span>
-                  <span className="font-bold text-foreground">{selectedTx.userName} ({selectedTx.userId})</span>
+            <div className="sheet-body" id="sheet-tx-body">
+              <div className="kv-list">
+                <div className="kv-row">
+                  <span className="kv-key">Pengguna</span>
+                  <span className="kv-val">
+                    {selectedTx.user || selectedTx.userName}{' '}
+                    <span className="mono text-muted">
+                      ({selectedTx.userNim || selectedTx.userId || 'M0523041'})
+                    </span>
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Mesin:</span>
-                  <span className="font-bold text-foreground">{selectedTx.machineName}</span>
+                <div className="kv-row">
+                  <span className="kv-key">Idempotency Key</span>
+                  <span className="kv-val mono text-xs">{selectedTx.idempotencyKey}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Waktu:</span>
-                  <span className="font-bold text-foreground">{new Date(selectedTx.timestamp).toLocaleString('id-ID')}</span>
+                <div className="kv-row">
+                  <span className="kv-key">Kategori Terdeteksi</span>
+                  <span className="kv-val">{selectedTx.materialLabel}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Berat Terukur:</span>
-                  <span className="font-bold text-foreground">{selectedTx.weightG} gram</span>
+                <div className="kv-row">
+                  <span className="kv-key">Reward Virtual</span>
+                  <span className="kv-val mono font-semibold">
+                    {(selectedTx.rewardRp || selectedTx.rewardPoints) > 0
+                      ? '+' +
+                        formatRupiah(selectedTx.rewardRp || (selectedTx.rewardPoints ? selectedTx.rewardPoints * 10 : 0))
+                      : 'Rp0 (Tidak diberikan)'}
+                  </span>
                 </div>
               </div>
 
-              {/* Multi-stage Sensor Verification List */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-foreground">Tahapan Validasi Sensor AIoT</h4>
-                <div className="space-y-1.5 text-xs">
-                  <div className="p-2.5 rounded-xl border border-border flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>1. Inisiasi QR Session Token</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-600 font-bold">Valid</span>
+              <div>
+                <div className="label" style={{ marginBottom: '0.65rem' }}>
+                  Alur Verifikasi Material Intelligence
+                </div>
+                <div className="pipeline-steps">
+                  <div className="pipeline-step">
+                    <div className="pipeline-dot ok">
+                      <QrCode size={14} />
+                    </div>
+                    <div className="pipeline-info">
+                      <div className="pipeline-title">
+                        <span>1. Sesi QR Mesin Valid</span>
+                        <span className="mono text-xs text-muted">OK</span>
+                      </div>
+                      <div className="pipeline-desc">
+                        Sesi pengguna terhubung dengan unit {selectedTx.machineId}.
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-2.5 rounded-xl border border-border flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>2. Computer Vision (MobileNetV3)</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-600 font-bold">
-                      {Math.round((selectedTx.aiConfidence || 0.95) * 100)}% Match
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl border border-border flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      {selectedTx.verificationStages?.weightValidated ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 text-rose-600" />
-                      )}
-                      <span>3. Load Cell HX711 (Bobot Kosong)</span>
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono font-bold ${
-                        selectedTx.verificationStages?.weightValidated ? 'text-emerald-600' : 'text-rose-600'
+                  <div className="pipeline-step">
+                    <div
+                      className={`pipeline-dot ${
+                        selectedTx.material !== 'UNKNOWN' &&
+                        (selectedTx.aiConfidence >= 75 || selectedTx.aiConfidence >= 0.75)
+                          ? 'ok'
+                          : 'fail'
                       }`}
                     >
-                      {selectedTx.verificationStages?.weightValidated ? 'Lolos (Kering)' : 'Anomali Berat'}
-                    </span>
+                      <Camera size={14} />
+                    </div>
+                    <div className="pipeline-info">
+                      <div className="pipeline-title">
+                        <span>2. Klasifikasi Computer Vision</span>
+                        <span className="mono text-xs">
+                          {selectedTx.aiConfidence > 1
+                            ? `${selectedTx.aiConfidence}%`
+                            : `${Math.round(selectedTx.aiConfidence * 100)}%`}
+                        </span>
+                      </div>
+                      <div className="pipeline-desc">Hasil model: {selectedTx.materialLabel}.</div>
+                    </div>
                   </div>
 
-                  <div className="p-2.5 rounded-xl border border-border flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>4. Motor Diverter Sorter</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-600 font-bold">Wadah Terpilih</span>
+                  <div className="pipeline-step">
+                    <div
+                      className={`pipeline-dot ${
+                        selectedTx.status !== 'REJECTED' && selectedTx.status !== 'rejected'
+                          ? 'ok'
+                          : 'fail'
+                      }`}
+                    >
+                      <Scale size={14} />
+                    </div>
+                    <div className="pipeline-info">
+                      <div className="pipeline-title">
+                        <span>3. Pemeriksaan Fisik Sensor</span>
+                        <span className="mono text-xs">
+                          {selectedTx.weightGram || selectedTx.weightG} g
+                        </span>
+                      </div>
+                      <div className="pipeline-desc">
+                        {selectedTx.sensorCheck ||
+                          (selectedTx.status === 'REJECTED' || selectedTx.status === 'rejected'
+                            ? 'Gagal (>45 g, indikasi cairan)'
+                            : 'Valid (12–45 g, kosong)')}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-2.5 rounded-xl border border-border flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>5. Idempotent Ledger Transaction</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-600 font-bold">Tercatat</span>
+                  <div className="pipeline-step">
+                    <div
+                      className={`pipeline-dot ${
+                        selectedTx.servoConfirm !== false &&
+                        selectedTx.status !== 'REJECTED' &&
+                        selectedTx.status !== 'rejected'
+                          ? 'ok'
+                          : selectedTx.status === 'PENDING'
+                          ? 'wait'
+                          : 'fail'
+                      }`}
+                    >
+                      <GitBranch size={14} />
+                    </div>
+                    <div className="pipeline-info">
+                      <div className="pipeline-title">
+                        <span>4. Aktuator Pemilah &amp; Konfirmasi</span>
+                        <span className="mono text-xs">
+                          {selectedTx.servoConfirm
+                            ? 'ACK'
+                            : selectedTx.status === 'PENDING'
+                            ? 'WAIT'
+                            : 'NACK'}
+                        </span>
+                      </div>
+                      <div className="pipeline-desc">
+                        Tujuan mekanik:{' '}
+                        {selectedTx.sortingBin ||
+                          (selectedTx.material === 'PET'
+                            ? 'Wadah PET #A'
+                            : selectedTx.material === 'ALUMINUM' || selectedTx.material === 'ALU'
+                            ? 'Wadah Aluminium #B'
+                            : 'Jalur Tolak / Retur')}
+                        .
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pipeline-step">
+                    <div
+                      className={`pipeline-dot ${
+                        (selectedTx.rewardRp || selectedTx.rewardPoints) > 0 ? 'ok' : 'fail'
+                      }`}
+                    >
+                      <Coins size={14} />
+                    </div>
+                    <div className="pipeline-info">
+                      <div className="pipeline-title">
+                        <span>5. Pencatatan Saldo Virtual</span>
+                        <span className="mono text-xs">
+                          {(selectedTx.rewardRp || selectedTx.rewardPoints) > 0
+                            ? '+' +
+                              formatRupiah(
+                                selectedTx.rewardRp || (selectedTx.rewardPoints ? selectedTx.rewardPoints * 10 : 0)
+                              )
+                            : 'Rp0'}
+                        </span>
+                      </div>
+                      <div className="pipeline-desc">
+                        {selectedTx.note ||
+                          ((selectedTx.rewardRp || selectedTx.rewardPoints) > 0
+                            ? 'Konfirmasi pemilahan diterima oleh backend, saldo virtual diperbarui.'
+                            : 'Tidak ada saldo yang diterbitkan karena transaksi gagal/ditolak.')}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-border">
+            <div className="sheet-footer">
+              <NavLink to="/transaksi" className="btn btn-outline btn-sm">
+                Buka Manajemen Transaksi
+              </NavLink>
               <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                id="btn-close-sheet-footer"
                 onClick={() => setSelectedTx(null)}
-                className="w-full py-2.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold rounded-xl transition"
               >
-                Tutup Detail
+                Tutup
               </button>
             </div>
-          </div>
-        </div>
+          </aside>
+        </>
       )}
-    </div>
+    </>
   );
 };

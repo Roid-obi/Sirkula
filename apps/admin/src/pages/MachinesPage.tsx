@@ -1,505 +1,780 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { NavLink, useSearchParams } from 'react-router-dom';
+import L from 'leaflet';
 import {
-  Cpu,
   Wifi,
-  Thermometer,
-  Layers,
+  Package,
+  Boxes,
   Activity,
-  AlertTriangle,
-  CheckCircle2,
-  RefreshCw,
-  ExternalLink,
-  ChevronRight,
-  ShieldCheck,
-  Zap,
-  X,
-  Radio,
-  Sliders,
-  Filter
+  X
 } from 'lucide-react';
 import { useAdmin } from '../context/AdminContext';
 import { RvmMachine } from '@sirkula/shared-types';
 
-export const MachinesPage: React.FC = () => {
-  const { machines, showToast } = useAdmin();
-  const [filterScope, setFilterScope] = useState<'all' | 'attention' | 'online'>('all');
-  const [selectedMachine, setSelectedMachine] = useState<RvmMachine | null>(null);
-  const [testingConnection, setTestingConnection] = useState(false);
+const CENTRAL_HUB = {
+  id: 'HUB-UNS-HQ',
+  name: 'Pusat Kendali Sirkula & Server IoT',
+  zone: 'Gedung Rektorat dr. Prakosa UNS',
+  lat: -7.55872,
+  lng: 110.85625,
+  ip: '10.200.0.1',
+  status: 'online',
+  statusLabel: 'Pusat Aktif',
+  role: 'Central Ingestion Gateway & Broker'
+};
 
-  // Filtered machines
+const UNS_CENTER: [number, number] = [-7.5589, 110.8562];
+const DEFAULT_ZOOM = 16;
+
+export const MachinesPage: React.FC = () => {
+  const { machines, theme, showToast } = useAdmin();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const urlView = searchParams.get('view');
+  const [activeView, setActiveView] = useState<'map' | 'grid'>(
+    urlView === 'grid' ? 'grid' : 'map'
+  );
+  const [activeScope, setActiveScope] = useState<'all' | 'attention'>('all');
+  const [selectedMachine, setSelectedMachine] = useState<RvmMachine | null>(null);
+  const [showTopology, setShowTopology] = useState<boolean>(true);
+
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<{ [id: string]: L.Marker }>({});
+  const networkLinesRef = useRef<L.Polyline[]>([]);
+
+  // Update view when URL query param changes
+  useEffect(() => {
+    if (urlView === 'grid' && activeView !== 'grid') {
+      setActiveView('grid');
+    } else if (urlView === 'map' && activeView !== 'map') {
+      setActiveView('map');
+    }
+  }, [urlView]);
+
+  const handleSetView = (view: 'map' | 'grid') => {
+    setActiveView(view);
+    setSearchParams({ view });
+  };
+
+  // Filtering
   const filteredMachines = machines.filter((m) => {
-    if (filterScope === 'attention') return m.status === 'warning' || m.status === 'offline';
-    if (filterScope === 'online') return m.status === 'online';
+    if (activeScope === 'attention') return m.status !== 'online';
     return true;
   });
 
-  const onlineCount = machines.filter((m) => m.status === 'online').length;
-  const warningCount = machines.filter((m) => m.status === 'warning').length;
-  const offlineCount = machines.filter((m) => m.status === 'offline').length;
-  const criticalCapacityCount = machines.filter(
-    (m) => Math.round((m.petCount / m.petCap) * 100) >= 80 || Math.round((m.aluCount / m.aluCap) * 100) >= 80
-  ).length;
+  const onlineCount = machines.filter((m) => m.status !== 'offline').length;
+  const totalPetKg = machines.reduce((acc, m) => acc + m.petKg, 0);
+  const totalAluKg = machines.reduce((acc, m) => acc + m.aluKg, 0);
+  const avgUptime = (
+    machines.reduce((acc, m) => acc + m.uptimePct, 0) / machines.length
+  )
+    .toFixed(1)
+    .replace('.', ',');
 
-  const handleTestConnection = () => {
+  const formatKg = (num: number) => {
+    return Number(num).toFixed(2).replace('.', ',') + ' kg';
+  };
+
+  // Status badge helper matching duitin-sampah-hackathon
+  const getBadge = (status: string, label: string) => {
+    if (status === 'online') {
+      return (
+        <span className="badge badge-success">
+          <span className="badge-dot" />
+          {label}
+        </span>
+      );
+    }
+    if (status === 'warning') {
+      return (
+        <span className="badge badge-warning">
+          <span className="badge-dot" />
+          {label}
+        </span>
+      );
+    }
+    return (
+      <span className="badge badge-destructive">
+        <span className="badge-dot" />
+        {label}
+      </span>
+    );
+  };
+
+  // Leaflet Marker Icon Generators matching duitin-sampah-hackathon/assets/js/pages/peta.js
+  const createMarkerIcon = (status: string, isHub = false) => {
+    if (isHub) {
+      return L.divIcon({
+        className: 'custom-rvm-icon',
+        html: `
+          <div class="rvm-marker-wrap hub" title="${CENTRAL_HUB.name}">
+            <div class="rvm-pulse-ring"></div>
+            <div class="rvm-node-core">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+              </svg>
+            </div>
+          </div>
+        `,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+        popupAnchor: [0, -18]
+      });
+    }
+
+    return L.divIcon({
+      className: 'custom-rvm-icon',
+      html: `
+        <div class="rvm-marker-wrap ${status}">
+          <div class="rvm-pulse-ring"></div>
+          <div class="rvm-node-core">
+            <span class="rvm-node-dot"></span>
+          </div>
+        </div>
+      `,
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+      popupAnchor: [0, -18]
+    });
+  };
+
+  // Map Tile URL
+  const getTileConfig = (dark: boolean) => {
+    if (dark) {
+      return {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        attribution: '&copy; Esri, OpenStreetMap contributors',
+        maxZoom: 18
+      };
+    }
+    return {
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    };
+  };
+
+  // Initialize and update Map with clean lifecycle management
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    // Clean up any existing map instance to avoid container reuse errors
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+    if ((container as any)._leaflet_id) {
+      delete (container as any)._leaflet_id;
+    }
+
+    const map = L.map(container, {
+      center: UNS_CENTER,
+      zoom: DEFAULT_ZOOM,
+      zoomControl: false
+    });
+
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    mapInstanceRef.current = map;
+
+    // Set TileLayer
+    const tileConfig = getTileConfig(theme === 'dark');
+    L.tileLayer(tileConfig.url, {
+      attribution: tileConfig.attribution,
+      maxZoom: tileConfig.maxZoom
+    }).addTo(map);
+
+    // Reset markers and lines
+    markersRef.current = {};
+    networkLinesRef.current = [];
+
+    // 1. Central Hub Marker
+    const hubMarker = L.marker([CENTRAL_HUB.lat, CENTRAL_HUB.lng], {
+      icon: createMarkerIcon('online', true),
+      zIndexOffset: 1000
+    }).addTo(map);
+
+    hubMarker.bindPopup(
+      `
+        <div class="map-popup-card">
+          <div class="map-popup-header">
+            <div>
+              <div class="mono text-xs font-semibold" style="color:hsl(var(--muted-foreground));">${CENTRAL_HUB.id}</div>
+              <div class="map-popup-title">${CENTRAL_HUB.name}</div>
+              <div class="map-popup-zone">${CENTRAL_HUB.zone}</div>
+            </div>
+            <span class="badge badge-success">Pusat Server</span>
+          </div>
+          <p class="text-xs text-muted" style="margin-top:0.35rem;">
+            Server gateway MQTT &amp; ingestion telemetri seluruh RVM Kampus UNS.
+          </p>
+        </div>
+      `,
+      { maxWidth: 300 }
+    );
+    markersRef.current[CENTRAL_HUB.id] = hubMarker;
+
+    // 2. Machine Markers
+    filteredMachines.forEach((m) => {
+      const totalCount = m.petCount + m.aluCount;
+      const totalCap = m.petCap + m.aluCap;
+      const totalPct = Math.round((totalCount / totalCap) * 100);
+
+      let badgeClass = 'badge-success';
+      if (m.status === 'warning') badgeClass = 'badge-warning';
+      if (m.status === 'offline') badgeClass = 'badge-destructive';
+
+      const marker = L.marker([m.lat, m.lng], {
+        icon: createMarkerIcon(m.status, false)
+      }).addTo(map);
+
+      const popupHtml = `
+        <div class="map-popup-card">
+          <div class="map-popup-header">
+            <div>
+              <div class="mono text-xs font-semibold" style="color:hsl(var(--muted-foreground));">${m.id}</div>
+              <div class="map-popup-title">${m.name}</div>
+              <div class="map-popup-zone">${m.zone}</div>
+            </div>
+            <span class="badge ${badgeClass}">${m.statusLabel}</span>
+          </div>
+
+          <div style="margin:0.75rem 0;">
+            <div class="row-between text-xs" style="margin-bottom:0.35rem;">
+              <span class="text-muted">Kapasitas Wadah</span>
+              <span class="mono font-semibold">${totalPct}%</span>
+            </div>
+            <div class="progress">
+              <div class="progress-bar ${totalPct >= 80 ? 'warn' : 'primary'}" style="width:${totalPct}%"></div>
+            </div>
+            <div class="row-between text-xs text-muted mono" style="margin-top:0.35rem;">
+              <span>${m.petCount} PET · ${m.aluCount} Alu</span>
+              <span>${totalCount}/${totalCap} unit</span>
+            </div>
+          </div>
+
+          <div class="map-popup-footer">
+            <span class="text-xs text-muted mono">${m.wifiRssi ? m.wifiRssi.split(' ')[0] : '-'}</span>
+            <button type="button" class="btn btn-outline btn-sm popup-diag-btn" data-id="${m.id}" style="font-size:0.75rem;padding:0.25rem 0.55rem;">
+              Diagnostik
+            </button>
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupHtml, { maxWidth: 300 });
+
+      marker.on('popupopen', () => {
+        const btn = document.querySelector(`.popup-diag-btn[data-id="${m.id}"]`);
+        if (btn) {
+          btn.addEventListener('click', () => {
+            setSelectedMachine(m);
+            marker.closePopup();
+          });
+        }
+      });
+
+      markersRef.current[m.id] = marker;
+    });
+
+    // 3. Topology Lines
+    if (showTopology) {
+      filteredMachines.forEach((m) => {
+        let lineColor = '#16a34a';
+        let lineClass = 'net-line-pulse';
+        let opacity = 0.75;
+        let dashArray = '6, 6';
+
+        if (m.status === 'warning') {
+          lineColor = '#d97706';
+        } else if (m.status === 'offline') {
+          lineColor = '#dc2626';
+          lineClass = '';
+          opacity = 0.35;
+          dashArray = '3, 6';
+        }
+
+        const poly = L.polyline(
+          [
+            [CENTRAL_HUB.lat, CENTRAL_HUB.lng],
+            [m.lat, m.lng]
+          ],
+          {
+            color: lineColor,
+            weight: m.status === 'offline' ? 1.5 : 2.5,
+            opacity,
+            dashArray,
+            className: lineClass
+          }
+        ).addTo(map);
+
+        networkLinesRef.current.push(poly);
+      });
+    }
+
+    // Invalidate map size to ensure proper layout
+    const timer1 = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    const timer2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 350);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [theme, showTopology, activeScope]);
+
+  // When switching views, trigger invalidateSize on the existing map
+  useEffect(() => {
+    if (activeView === 'map' && mapInstanceRef.current) {
+      const t1 = setTimeout(() => {
+        mapInstanceRef.current?.invalidateSize();
+      }, 50);
+      const t2 = setTimeout(() => {
+        mapInstanceRef.current?.invalidateSize();
+      }, 200);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [activeView]);
+
+  // Focus map back to center
+  const focusUns = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo(UNS_CENTER, DEFAULT_ZOOM, { duration: 0.6 });
+    }
+  };
+
+  const handlePing = () => {
     if (!selectedMachine) return;
-    setTestingConnection(true);
-    setTimeout(() => {
-      setTestingConnection(false);
+    if (selectedMachine.status === 'offline') {
       showToast(
-        'Uji Koneksi Berhasil',
-        `Ping ke ${selectedMachine.name} (IP: 192.168.1.${selectedMachine.id.slice(-2)}) latensi 18ms. Firmware ESP32-S3 stabil.`,
+        `Ping ${selectedMachine.id} Timeout`,
+        'Unit belum merespons. Buffer lokal aman.',
+        'warning'
+      );
+    } else {
+      showToast(
+        `Heartbeat ${selectedMachine.id} Normal`,
+        'Respons HTTP 200 OK diterima dalam 28 ms.',
         'success'
       );
-    }, 1200);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <>
+      {/* Page Header matching duitin-sampah-hackathon */}
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Monitoring Mesin RVM
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Telemetri perangkat cerdas, kapasitas kompartemen terpilah, dan kondisi subsistem sensor secara live.
+          <h1 className="page-title">Monitoring Mesin</h1>
+          <p className="page-description">
+            Status operasional unit RVM, kapasitas wadah terpilah, dan sebaran jaringan IoT Kampus UNS.
           </p>
         </div>
+        <div className="page-actions">
+          {/* View Mode Switch: Grid vs Map */}
+          <div className="tabs-list" id="machine-view-tabs">
+            <button
+              type="button"
+              className={`tab-trigger ${activeView === 'map' ? 'active' : ''}`}
+              onClick={() => handleSetView('map')}
+            >
+              Peta Sebaran
+            </button>
+            <button
+              type="button"
+              className={`tab-trigger ${activeView === 'grid' ? 'active' : ''}`}
+              onClick={() => handleSetView('grid')}
+            >
+              Kartu Unit
+            </button>
+          </div>
 
-        {/* Scope Filter Tabs */}
-        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <button
-            type="button"
-            onClick={() => setFilterScope('all')}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              filterScope === 'all'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            Semua ({machines.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterScope('attention')}
-            className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              filterScope === 'attention'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400'
-            }`}
-          >
-            <AlertTriangle className="h-3 w-3" />
-            Perhatian ({warningCount + offlineCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterScope('online')}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-              filterScope === 'online'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
-          >
-            Online Siap ({onlineCount})
-          </button>
+          {/* Scope Filter Tabs */}
+          <div className="tabs-list" id="machine-scope-tabs">
+            <button
+              type="button"
+              className={`tab-trigger ${activeScope === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveScope('all')}
+            >
+              Semua ({machines.length})
+            </button>
+            <button
+              type="button"
+              className={`tab-trigger ${activeScope === 'attention' ? 'active' : ''}`}
+              onClick={() => setActiveScope('attention')}
+            >
+              Perhatian ({machines.filter((m) => m.status !== 'online').length})
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Warning Banner if any units need attention */}
-      {(warningCount > 0 || offlineCount > 0) && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div className="flex-1">
-            <span className="font-semibold">Peringatan Operasional:</span> Terdapat{' '}
-            <strong>{warningCount} unit mendekati kapasitas maksimal</strong> dan{' '}
-            <strong>{offlineCount} unit memerlukan pengecekan jaringan Wi-Fi</strong>. Segera jadwalkan
-            pengosongan wadah atau verifikasi sinyal gateway.
-          </div>
-        </div>
-      )}
-
-      {/* KPI Cards Summary */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Unit Terpasang</span>
-            <span className="rounded-md bg-emerald-50 p-1.5 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <Cpu className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            {machines.length}{' '}
-            <span className="text-xs font-normal text-slate-500">Node IoT</span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">100% tersebar di titik strategis</p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Status Node Aktif</span>
-            <span className="rounded-md bg-emerald-50 p-1.5 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <Radio className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-            {onlineCount}/{machines.length}{' '}
-            <span className="text-xs font-normal text-slate-500">Online</span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">MQTT Heartbeat aktif per 5 detik</p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Wadah Kritis (≥80%)</span>
-            <span className="rounded-md bg-amber-50 p-1.5 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-            {criticalCapacityCount}{' '}
-            <span className="text-xs font-normal text-slate-500">Unit</span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">Butuh penjemputan logistik batch</p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Rata-rata Uptime</span>
-            <span className="rounded-md bg-emerald-50 p-1.5 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <Activity className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            {(machines.reduce((acc, m) => acc + m.uptimePct, 0) / machines.length).toFixed(1)}%
-          </div>
-          <p className="mt-1 text-xs text-slate-500">Reliabilitas operasional prima</p>
+      {/* Clean Operational Alert */}
+      <div
+        className="alert alert-warning"
+        id="machine-alert-banner"
+        style={{ padding: '0.6rem 0.85rem', marginBottom: '1.25rem' }}
+      >
+        <div className="text-xs">
+          <strong>RVM-UNS-02</strong> kapasitas PET 89% (jadwal angkut sore) ·{' '}
+          <strong>RVM-UNS-04</strong> sinyal Wi-Fi terputus.
         </div>
       </div>
 
-      {/* Machine Cards Grid */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        {filteredMachines.map((machine) => {
-          const petPct = Math.min(100, Math.round((machine.petCount / machine.petCap) * 100));
-          const aluPct = Math.min(100, Math.round((machine.aluCount / machine.aluCap) * 100));
+      {/* Summary Strip (4 Clean KPIs) */}
+      <section className="grid-kpi" id="machine-kpi-strip">
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Konektivitas Unit</span>
+            <span className="kpi-icon">
+              <Wifi size={15} />
+            </span>
+          </div>
+          <div className="kpi-value">
+            {onlineCount} / {machines.length}{' '}
+            <span className="text-muted" style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+              aktif
+            </span>
+          </div>
+          <div className="kpi-sub">
+            <span>
+              {onlineCount} Online · {machines.length - onlineCount} Offline
+            </span>
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Muatan Wadah PET</span>
+            <span className="kpi-icon">
+              <Package size={15} />
+            </span>
+          </div>
+          <div className="kpi-value">{formatKg(totalPetKg)}</div>
+          <div className="kpi-sub">
+            <span>472 / 800 botol</span>
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Muatan Wadah Aluminium</span>
+            <span className="kpi-icon">
+              <Boxes size={15} />
+            </span>
+          </div>
+          <div className="kpi-value">{formatKg(totalAluKg)}</div>
+          <div className="kpi-sub">
+            <span>330 / 600 kaleng</span>
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-label">Rata-Rata Uptime</span>
+            <span className="kpi-icon">
+              <Activity size={15} />
+            </span>
+          </div>
+          <div className="kpi-value">{avgUptime}%</div>
+          <div className="kpi-sub">
+            <span>Heartbeat berkala</span>
+          </div>
+        </div>
+      </section>
+
+      {/* View 1: Machine Cards Grid (Persisted in DOM, toggled via display) */}
+      <section
+        className="grid-2"
+        id="machine-cards-grid"
+        style={{
+          display: activeView === 'grid' ? 'grid' : 'none',
+          marginTop: '0.5rem',
+          gridTemplateColumns: filteredMachines.length === 1 ? 'minmax(0, 760px)' : ''
+        }}
+      >
+        {filteredMachines.map((m) => {
+          const totalCount = m.petCount + m.aluCount;
+          const totalCap = m.petCap + m.aluCap;
+          const totalPct = Math.round((totalCount / totalCap) * 100);
+          const pingText = m.wifiRssi ? '18 ms' : 'RTO';
+          const signalText =
+            m.status === 'offline' ? 'Terputus' : `${m.wifiRssi ? m.wifiRssi.split(' ')[0] : '-'} dBm`;
 
           return (
-            <div
-              key={machine.id}
-              className="group relative flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-700/50"
-            >
-              <div>
-                {/* Header info */}
-                <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-mono text-sm font-bold text-slate-900 dark:text-white">
-                        {machine.id}
-                      </h2>
-                      {machine.isMvp && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                          MVP Live
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">
-                      {machine.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{machine.zone}</p>
+            <article key={m.id} className="card">
+              <div className="card-header">
+                <div>
+                  <div className="row-gap-sm">
+                    <span
+                      className="mono text-xs font-semibold"
+                      style={{ color: 'hsl(var(--muted-foreground))' }}
+                    >
+                      {m.id}
+                    </span>
                   </div>
-
-                  {/* Status badge */}
-                  <div>
-                    {machine.status === 'online' && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        Online
-                      </span>
-                    )}
-                    {machine.status === 'warning' && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" />
-                        Hampir Penuh
-                      </span>
-                    )}
-                    {machine.status === 'offline' && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-300">
-                        <span className="h-2 w-2 rounded-full bg-rose-500" />
-                        Offline
-                      </span>
-                    )}
-                  </div>
+                  <h2 className="card-title" style={{ fontSize: '1.05rem', marginTop: '0.25rem' }}>
+                    {m.name}
+                  </h2>
+                  <p className="card-description">{m.zone}</p>
                 </div>
-
-                {/* Real-time bin capacities */}
-                <div className="mt-4 space-y-3">
-                  {/* PET */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        Wadah Botol PET
-                      </span>
-                      <span className="font-mono text-slate-600 dark:text-slate-400">
-                        {machine.petCount}/{machine.petCap} unit ({petPct}%) · {machine.petKg.toFixed(2)} kg
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div
-                        className={`h-full transition-all ${
-                          petPct >= 85
-                            ? 'bg-amber-500'
-                            : petPct >= 95
-                            ? 'bg-rose-500'
-                            : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${petPct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Aluminium */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
-                        <span className="h-2 w-2 rounded-full bg-sky-500" />
-                        Wadah Kaleng Aluminium
-                      </span>
-                      <span className="font-mono text-slate-600 dark:text-slate-400">
-                        {machine.aluCount}/{machine.aluCap} unit ({aluPct}%) · {machine.aluKg.toFixed(2)} kg
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div
-                        className={`h-full transition-all ${
-                          aluPct >= 85
-                            ? 'bg-amber-500'
-                            : aluPct >= 95
-                            ? 'bg-rose-500'
-                            : 'bg-sky-500'
-                        }`}
-                        style={{ width: `${aluPct}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Telemetry Metrics Badges */}
-                <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 dark:border-slate-800/60 dark:bg-slate-800/40">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      <Thermometer className="h-3 w-3" />
-                      Suhu
-                    </div>
-                    <div className="mt-0.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {machine.tempC}°C
-                    </div>
-                  </div>
-
-                  <div className="text-center border-x border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      <Wifi className="h-3 w-3" />
-                      Wi-Fi
-                    </div>
-                    <div className="mt-0.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {machine.wifiRssi}
-                    </div>
-                  </div>
-
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                      <Zap className="h-3 w-3" />
-                      Hari Ini
-                    </div>
-                    <div className="mt-0.5 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {machine.todayTx} tx
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sensor System Info */}
-                <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                  <span>Sensors: {machine.sensors}</span>
-                  <span className="font-mono">Sync: {machine.lastSync}</span>
-                </div>
+                {getBadge(m.status, m.statusLabel)}
               </div>
 
-              {/* Action Footer */}
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-[11px] font-mono text-slate-400">
-                  Model: {machine.cvModel.split(' ')[0]}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMachine(machine)}
-                  className="flex items-center gap-1 text-xs font-semibold text-emerald-600 transition-colors hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+              <div className="card-content stack" style={{ gap: '0.75rem' }}>
+                {/* Unified Storage Meter */}
+                <div
+                  style={{
+                    padding: '0.75rem 0.85rem',
+                    borderRadius: 'var(--radius)',
+                    backgroundColor: 'hsl(var(--muted)/0.4)',
+                    border: '1px solid hsl(var(--border))'
+                  }}
                 >
-                  <span>Diagnostik & Kalibrasi</span>
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Diagnostics Drawer (Progressive Disclosure) */}
-      {selectedMachine && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 p-5 dark:border-slate-800">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-mono text-base font-bold text-slate-900 dark:text-white">
-                    {selectedMachine.id}
-                  </h3>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      selectedMachine.status === 'online'
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                        : selectedMachine.status === 'warning'
-                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
-                    }`}
+                  <div className="row-between text-xs" style={{ marginBottom: '0.35rem' }}>
+                    <span className="font-medium">Kapasitas Wadah</span>
+                    <span className="mono font-semibold">
+                      {totalPct}% ({totalCount}/{totalCap} unit)
+                    </span>
+                  </div>
+                  <div className="progress">
+                    <div
+                      className={`progress-bar ${totalPct >= 80 ? 'warn' : 'primary'}`}
+                      style={{ width: `${totalPct}%` }}
+                    />
+                  </div>
+                  <div
+                    className="row-between text-xs text-muted mono"
+                    style={{ marginTop: '0.35rem' }}
                   >
-                    {selectedMachine.statusLabel}
+                    <span>
+                      PET: {m.petCount}/{m.petCap}
+                    </span>
+                    <span>
+                      Alu: {m.aluCount}/{m.aluCap}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Status Line */}
+                <div
+                  className="row-between text-xs mono text-muted"
+                  style={{ padding: '0.2rem' }}
+                >
+                  <span>
+                    Ping: <strong>{pingText}</strong>
+                  </span>
+                  <span>
+                    Sinyal: <strong>{signalText}</strong>
+                  </span>
+                  <span>
+                    Hari Ini: <strong>{m.todayTx} tx</strong>
+                  </span>
+                  <span>
+                    Suhu: <strong>{m.tempC}°C</strong>
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  {selectedMachine.name} · {selectedMachine.zone}
+              </div>
+
+              <div className="card-footer">
+                <span className="text-xs text-muted mono">{m.lastSync}</span>
+                <div className="row-gap-sm">
+                  {m.status === 'warning' && (
+                    <NavLink to="/pengumpulan" className="btn btn-outline btn-sm">
+                      Jadwal Angkut
+                    </NavLink>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setSelectedMachine(m)}
+                  >
+                    Diagnostik
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      {/* View 2: Integrated Interactive Map (Persisted in DOM, toggled via display) */}
+      <section
+        id="machine-map-section"
+        style={{
+          display: activeView === 'map' ? 'block' : 'none',
+          marginTop: '0.5rem'
+        }}
+      >
+        <div className="map-card-wrapper">
+          <div className="map-toolbar-floating">
+            <button
+              type="button"
+              className={`btn btn-outline btn-sm ${showTopology ? 'active' : ''}`}
+              id="btn-toggle-topology"
+              onClick={() => setShowTopology(!showTopology)}
+            >
+              Topologi Jaringan
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              id="btn-focus-uns"
+              onClick={focusUns}
+            >
+              Fokus UNS
+            </button>
+          </div>
+
+          <div
+            id="machine-map-canvas"
+            ref={mapContainerRef}
+            className="map-container"
+            style={{ height: '520px', width: '100%' }}
+          />
+
+          <div className="map-legend-floating">
+            <div className="map-legend-item">
+              <span className="badge-dot" style={{ color: 'hsl(var(--foreground))' }} />
+              Pusat Server
+            </div>
+            <div className="map-legend-item">
+              <span className="badge-dot" style={{ color: 'hsl(var(--primary))' }} />
+              Online
+            </div>
+            <div className="map-legend-item">
+              <span className="badge-dot" style={{ color: 'hsl(var(--warning))' }} />
+              Hampir Penuh
+            </div>
+            <div className="map-legend-item">
+              <span className="badge-dot" style={{ color: 'hsl(var(--destructive))' }} />
+              Offline
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Hardware Diagnostics Sheet (Progressive Disclosure) matching duitin-sampah-hackathon */}
+      {selectedMachine && (
+        <>
+          <div
+            className="sheet-backdrop open"
+            id="diag-backdrop"
+            onClick={() => setSelectedMachine(null)}
+          />
+          <aside className="sheet-panel open" id="diag-panel" aria-hidden="false">
+            <div className="sheet-header">
+              <div>
+                <div className="row-gap-sm">
+                  <h3 className="card-title mono" id="diag-id">
+                    {selectedMachine.id} — {selectedMachine.name}
+                  </h3>
+                  <span id="diag-badge">
+                    {getBadge(selectedMachine.status, selectedMachine.statusLabel)}
+                  </span>
+                </div>
+                <p className="card-description" id="diag-loc">
+                  {selectedMachine.zone}
                 </p>
               </div>
               <button
                 type="button"
+                className="btn btn-ghost btn-icon"
+                id="btn-close-diag"
+                aria-label="Tutup"
                 onClick={() => setSelectedMachine(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
-                <X className="h-5 w-5" />
+                <X size={16} />
               </button>
             </div>
 
-            {/* Drawer Body */}
-            <div className="flex-1 space-y-6 overflow-y-auto p-5 text-sm">
-              {/* Telemetry Summary */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Status Subsistem Hardware
-                </div>
-                <div className="mt-3 space-y-2 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700/60">
-                    <span className="text-slate-600 dark:text-slate-400">Mikrokontroler Utama</span>
-                    <span className="font-mono font-medium text-slate-900 dark:text-white">
-                      {selectedMachine.controller}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700/60">
-                    <span className="text-slate-600 dark:text-slate-400">Computer Vision Edge</span>
-                    <span className="font-mono font-medium text-slate-900 dark:text-white">
-                      {selectedMachine.cvModel}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700/60">
-                    <span className="text-slate-600 dark:text-slate-400">Load Cell Sensor Berat</span>
-                    <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">
-                      HX711 0.1g Presisi (Terkalibrasi)
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700/60">
-                    <span className="text-slate-600 dark:text-slate-400">Mekanisme Servo Sorter</span>
-                    <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">
-                      MG996R Dual Flap (Aktif)
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700/60">
-                    <span className="text-slate-600 dark:text-slate-400">Koneksi Sinyal Gateway</span>
-                    <span className="font-mono font-medium text-slate-900 dark:text-white">
-                      {selectedMachine.wifiRssi} (Sangat Stabil)
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-slate-600 dark:text-slate-400">Uptime Sistem</span>
-                    <span className="font-mono font-medium text-slate-900 dark:text-white">
-                      {selectedMachine.uptimePct}%
-                    </span>
-                  </div>
-                </div>
+            <div className="sheet-body" id="diag-body">
+              <div className="label" style={{ marginBottom: '0.5rem' }}>
+                Status Sub-Modul Hardware
               </div>
-
-              {/* Live Sensor Weights */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Kalibrasi Kompartemen Terpilah
-                </h4>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                    <div className="text-[11px] text-slate-500">Total Berat PET</div>
-                    <div className="mt-1 font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                      {selectedMachine.petKg.toFixed(2)} kg
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {selectedMachine.petCount} botol terkompaksi
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                    <div className="text-[11px] text-slate-500">Total Berat Aluminium</div>
-                    <div className="mt-1 font-mono text-lg font-bold text-sky-600 dark:text-sky-400">
-                      {selectedMachine.aluKg.toFixed(2)} kg
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {selectedMachine.aluCount} kaleng terkompaksi
-                    </div>
-                  </div>
+              <div className="kv-list">
+                <div className="kv-row">
+                  <span className="kv-key">A. Input Section</span>
+                  <span className="badge badge-success">Normal · IR Aktif</span>
                 </div>
-              </div>
-
-              {/* Maintenance Actions */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Tindakan Operasional Langsung
-                </h4>
-                <div className="mt-3 space-y-2">
-                  <button
-                    type="button"
-                    onClick={handleTestConnection}
-                    disabled={testingConnection}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                <div className="kv-row">
+                  <span className="kv-key">B. Modul Kamera</span>
+                  <span className="mono text-xs">OV2640 · {selectedMachine.cvModel}</span>
+                </div>
+                <div className="kv-row">
+                  <span className="kv-key">C. Sensor Berat</span>
+                  <span className="mono text-xs">
+                    Load Cell HX711 (Akurasi Tinggi · Kalibrasi Normal)
+                  </span>
+                </div>
+                <div className="kv-row">
+                  <span className="kv-key">D. Pemrosesan</span>
+                  <span className="mono text-xs">
+                    {selectedMachine.controller} · {selectedMachine.tempC}°C
+                  </span>
+                </div>
+                <div className="kv-row">
+                  <span className="kv-key">E. Servo Pemilah</span>
+                  <span className="text-xs">2 Arah (PET / Alu)</span>
+                </div>
+                <div className="kv-row">
+                  <span className="kv-key">F. Wadah Penyimpanan</span>
+                  <span
+                    className={`badge ${
+                      selectedMachine.status === 'warning' ? 'badge-warning' : 'badge-success'
+                    }`}
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${testingConnection ? 'animate-spin' : ''}`} />
-                    <span>{testingConnection ? 'Menguji Latensi Jaringan...' : 'Uji Ping & Handshake MQTT'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showToast(
-                        'Pembersihan Sensor Dimulai',
-                        `Perintah kalibrasi tare beban dikirim ke ESP32 ${selectedMachine.id}.`,
-                        'info'
-                      );
-                    }}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    PET {selectedMachine.petCount}/{selectedMachine.petCap} · Alu{' '}
+                    {selectedMachine.aluCount}/{selectedMachine.aluCap}
+                  </span>
+                </div>
+                <div className="kv-row">
+                  <span className="kv-key">G. Jaringan &amp; IP</span>
+                  <span
+                    className={`mono text-xs ${
+                      selectedMachine.status === 'offline' ? 'text-danger' : 'text-success'
+                    }`}
                   >
-                    <Sliders className="h-3.5 w-3.5" />
-                    <span>Kalibrasi Ulang Sensor Beban (Tare 0.0g)</span>
-                  </button>
+                    {selectedMachine.wifiRssi || 'Stabil'}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Drawer Footer */}
-            <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+            <div className="sheet-footer">
               <button
                 type="button"
-                onClick={() => setSelectedMachine(null)}
-                className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow transition hover:bg-emerald-700"
+                className="btn btn-outline btn-sm"
+                id="btn-ping-diag"
+                onClick={handlePing}
               >
-                Tutup Diagnostik
+                Uji Koneksi API
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                id="btn-close-diag-footer"
+                onClick={() => setSelectedMachine(null)}
+              >
+                Selesai
               </button>
             </div>
-          </div>
-        </div>
+          </aside>
+        </>
       )}
-    </div>
+    </>
   );
 };

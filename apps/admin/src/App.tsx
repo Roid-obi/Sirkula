@@ -4,7 +4,6 @@ import { AdminLayout } from './layouts/AdminLayout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { MachinesPage } from './pages/MachinesPage';
-import { MapPage } from './pages/MapPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { RewardsPage } from './pages/RewardsPage';
@@ -23,7 +22,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/mesin" element={<MachinesPage />} />
-          <Route path="/peta" element={<MapPage />} />
+          <Route path="/peta" element={<Navigate to="/mesin?view=map" replace />} />
           <Route path="/transaksi" element={<TransactionsPage />} />
           <Route path="/analitik" element={<AnalyticsPage />} />
           <Route path="/reward" element={<RewardsPage />} />

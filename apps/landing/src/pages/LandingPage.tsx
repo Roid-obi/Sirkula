@@ -618,57 +618,227 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. 5 Tahap Alur Penyetoran */}
-      <section id="cara-kerja" className="py-16 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="text-center max-w-2xl mx-auto space-y-2">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700">
-              Alur Penggunaan
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950">
-              5 Langkah Mudah Menyetor di Smart RVM
+      {/* 6. 5 Tahap Alur Penyetoran (Visual Connected Timeline) */}
+      <section id="cara-kerja" className="py-20 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          {/* Header Timeline */}
+          <div className="text-center max-w-2xl mx-auto space-y-2.5">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-xs font-semibold">
+              <Clock className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Alur Penggunaan Terintegrasi</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-950 tracking-tight">
+              Timeline 5 Langkah Menyetor di Smart RVM
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Pengalaman setor cepat dan higienis hanya dalam hitungan detik.
+            <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto leading-relaxed">
+              Dari pemindaian awal hingga poin cair ke dompet digital—proses instan, higienis, dan terverifikasi otomatis dalam tempo kurang dari 30 detik.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3.5 text-left">
+          {/* Desktop Connected Horizontal Timeline (>= lg screens) */}
+          <div className="hidden lg:block relative pt-4 pb-2">
+            {/* Continuous Progress Tracker Line */}
+            <div className="absolute top-12 left-16 right-16 h-1 bg-slate-100 rounded-full -z-0">
+              <div className="h-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-500 rounded-full" />
+            </div>
+
+            <div className="grid grid-cols-5 gap-4 relative z-10 text-center">
+              {[
+                {
+                  step: '01',
+                  time: '~3 dtk',
+                  title: 'Pindai QR Sesi',
+                  tag: 'Otentikasi ESP32',
+                  icon: QrCode,
+                  desc: 'Buka scanner pada aplikasi web, lalu pindai kode QR dinamis di layar mesin Smart RVM untuk menghubungkan sesi Anda.',
+                  highlight: 'Koneksi MQTT 120ms'
+                },
+                {
+                  step: '02',
+                  time: '~5 dtk',
+                  title: 'Masukkan Kemasan',
+                  tag: 'Feeder Sensor Aktif',
+                  icon: Recycle,
+                  desc: 'Setelah penutup feeder terbuka otomatis, masukkan botol plastik PET atau kaleng aluminium kosong satu per satu.',
+                  highlight: 'Deteksi Optik IR'
+                },
+                {
+                  step: '03',
+                  time: '~2 dtk',
+                  title: 'Inspeksi AI & Bobot',
+                  tag: 'MobileNetV3 + HX711',
+                  icon: Cpu,
+                  desc: 'Kamera AI memeriksa material kemasan, sementara sensor load cell memastikan botol bebas dari residu cairan.',
+                  highlight: 'Akurasi 99.4% & Anti-Cairan'
+                },
+                {
+                  step: '04',
+                  time: 'Otomatis',
+                  title: 'Pemisahan Otomatis',
+                  tag: 'Dual Flap Sorter',
+                  icon: Layers,
+                  desc: 'Mekanisme diverter servo otomatis mengarahkan kemasan ke wadah material yang sesuai tanpa tercampur.',
+                  highlight: 'Sortir Terpilah Bersih'
+                },
+                {
+                  step: '05',
+                  time: 'Instan',
+                  title: 'Klaim Poin Reward',
+                  tag: 'Ledger Atomik',
+                  icon: Coins,
+                  desc: 'Poin reward langsung diterbitkan ke dompet digital akun Anda secara real-time dan siap ditukarkan dengan beragam voucher.',
+                  highlight: '+10 / +20 Poin per Unit'
+                }
+              ].map((s) => (
+                <div key={s.step} className="group flex flex-col items-center">
+                  {/* Step Node Pin with Pulse Ring */}
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full bg-white border-2 border-emerald-500 shadow-md flex items-center justify-center text-emerald-600 transition-all duration-300 group-hover:scale-110 group-hover:border-emerald-600 group-hover:shadow-emerald-200/50 group-hover:shadow-lg">
+                      <s.icon className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <span className="absolute -top-2 -right-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono text-[10px] font-bold shadow-sm">
+                      {s.step}
+                    </span>
+                  </div>
+
+                  {/* Duration Badge */}
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-200/70 mt-3 shadow-2xs">
+                    <Clock className="w-2.5 h-2.5 text-emerald-600" />
+                    {s.time}
+                  </span>
+
+                  {/* Step Card Content */}
+                  <div className="mt-4 w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-white hover:shadow-md transition-all duration-200 text-left flex flex-col justify-between h-[215px]">
+                    <div>
+                      <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-emerald-700">
+                        {s.tag}
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-950 mt-1">{s.title}</h4>
+                      <p className="text-[11px] text-slate-600 leading-relaxed mt-2">{s.desc}</p>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-slate-200/80 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>{s.highlight}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile & Tablet Vertical Connected Timeline (< lg screens) */}
+          <div className="block lg:hidden relative pl-6 sm:pl-8 space-y-6 text-left">
+            {/* Vertical Connecting Track Line */}
+            <div className="absolute top-4 bottom-4 left-3 sm:left-4 w-0.5 bg-gradient-to-b from-emerald-500 via-emerald-600 to-teal-500 rounded-full" />
+
             {[
               {
-                step: '1',
+                step: '01',
+                time: '~3 dtk',
                 title: 'Pindai QR Sesi',
-                desc: 'Dekati unit Smart RVM dan pindai kode QR yang tampil di layar mesin untuk menghubungkan sesi Anda.'
+                tag: 'Otentikasi ESP32',
+                icon: QrCode,
+                desc: 'Buka scanner pada aplikasi web, lalu pindai kode QR dinamis di layar mesin Smart RVM untuk menghubungkan sesi Anda.',
+                highlight: 'Koneksi MQTT 120ms'
               },
               {
-                step: '2',
+                step: '02',
+                time: '~5 dtk',
                 title: 'Masukkan Kemasan',
-                desc: 'Masukkan botol plastik PET atau kaleng aluminium kosong satu per satu ke lubang inspeksi mesin.'
+                tag: 'Feeder Sensor Aktif',
+                icon: Recycle,
+                desc: 'Setelah penutup feeder terbuka otomatis, masukkan botol plastik PET atau kaleng aluminium kosong satu per satu.',
+                highlight: 'Deteksi Optik IR'
               },
               {
-                step: '3',
-                title: 'Inspeksi Otomatis',
-                desc: 'Kamera AI memeriksa material dan sensor timbangan memastikan kemasan bebas dari sisa cairan.'
+                step: '03',
+                time: '~2 dtk',
+                title: 'Inspeksi AI & Bobot',
+                tag: 'MobileNetV3 + HX711',
+                icon: Cpu,
+                desc: 'Kamera AI memeriksa material kemasan, sementara sensor load cell memastikan botol bebas dari residu cairan.',
+                highlight: 'Akurasi 99.4% & Anti-Cairan'
               },
               {
-                step: '4',
+                step: '04',
+                time: 'Otomatis',
                 title: 'Pemisahan Otomatis',
-                desc: 'Mekanisme diverter otomatis mengarahkan kemasan ke wadah material yang sesuai di dalam mesin.'
+                tag: 'Dual Flap Sorter',
+                icon: Layers,
+                desc: 'Mekanisme diverter servo otomatis mengarahkan kemasan ke wadah material yang sesuai tanpa tercampur.',
+                highlight: 'Sortir Terpilah Bersih'
               },
               {
-                step: '5',
-                title: 'Dapatkan Poin',
-                desc: 'Poin reward langsung masuk ke dompet digital akun Anda dan siap ditukarkan kapan saja.'
+                step: '05',
+                time: 'Instan',
+                title: 'Klaim Poin Reward',
+                tag: 'Ledger Atomik',
+                icon: Coins,
+                desc: 'Poin reward langsung diterbitkan ke dompet digital akun Anda secara real-time dan siap ditukarkan dengan beragam voucher.',
+                highlight: '+10 / +20 Poin per Unit'
               }
             ].map((s) => (
-              <div key={s.step} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
-                <span className="w-7 h-7 rounded-full bg-emerald-600 text-white font-mono font-bold text-xs flex items-center justify-center">
-                  {s.step}
-                </span>
-                <h4 className="text-xs font-bold text-slate-950">{s.title}</h4>
-                <p className="text-[11px] text-slate-600 leading-relaxed">{s.desc}</p>
+              <div key={s.step} className="relative group">
+                {/* Node circle on the vertical line */}
+                <div className="absolute -left-[30px] sm:-left-[38px] top-3 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white border-2 border-emerald-500 shadow flex items-center justify-center text-emerald-600 z-10">
+                  <s.icon className="w-4 h-4 text-emerald-600" />
+                </div>
+
+                {/* Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-white hover:border-emerald-300 hover:shadow-md transition-all space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono text-[10px] font-bold">
+                      LANGKAH {s.step}
+                    </span>
+                    <span className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                      <Clock className="w-3 h-3 text-emerald-600" /> {s.time}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-wider">
+                      {s.tag}
+                    </span>
+                    <h4 className="text-sm font-bold text-slate-950 mt-0.5">{s.title}</h4>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">{s.desc}</p>
+
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{s.highlight}</span>
+                  </div>
+                </div>
               </div>
             ))}
+          </div>
+
+          {/* Timeline Summary & Callout Strip */}
+          <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/60 p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left shadow-xs">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Sparkles className="w-5 h-5 text-amber-300" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-slate-950">
+                  Total Siklus Rata-rata Hanya &lt; 30 Detik
+                </h4>
+                <p className="text-[11px] sm:text-xs text-slate-600">
+                  Layanan terbuka untuk umum setiap hari tanpa perlu pemilahan manual di rumah.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href={USER_APP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition shadow-sm shrink-0"
+            >
+              <span>Buka Scanner Sesi</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
           </div>
         </div>
       </section>
